@@ -1,0 +1,177 @@
+---
+title: "Practical Machine Learning Project"
+author: "Samer Mestom"
+date: "April 26, 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+This is a document to descibe how to classify the performance of trainees based on figures aquired from training watches. The analysis compares three methods for modeling: Linear discrimination analysis (LDA), Quadratic discrimination analysis (QDA), and Boosting (GBM).
+
+The following steps are taken to make the study:
+
+1- Aquire the data from  data set files
+
+2- Make a pre-processing by taking out mostly zero and N/A columns
+
+3- Create three folds for the three methods
+
+4- Make modeling for each fold using the training set
+
+5- Make predict for the test set using the three models
+
+6- Make a cross validation between the sets by comparing the accuracy and out of sample errors.
+
+As it would be shown, boosting (GBM) is the most accurate (99%) but the slowest.The QDA gives good results (90%) with fast performance. The LDA is very moderate (70%), and does not give relaible results.
+
+
+Here I would like to pay tribute to 
+
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+who made the data availabe for public.
+
+# 1- Aquire data from training and test .csv files
+```{r load caret}
+
+library(caret)
+
+setwd("D:/Box Sync/Data Science/Machine Learning/Project")
+
+intraining = read.csv("pml-training.csv")
+intesting = read.csv("pml-testing.csv")
+
+# Set seed at startup
+set.seed(11211)
+
+
+```
+
+# 2- Refining training Data (Basic Processing)
+
+In order to make modeling faster, removing zero and N/A columns is important. 
+
+
+
+```{r Pre-Processing}
+
+## Select near zero values and make a list where columns where nzv = False
+nsv <- nearZeroVar(intraining,saveMetrics=TRUE)
+col<-colnames(intraining)
+l<-list(col[!nsv[,4]])
+
+#Make a new set by taking out the nzv columns, and call it refined training set
+df<-intraining[,l[[1]]]
+
+# Again, take out columns where N/A values are majority (consider that those columns don't have more than 1000 as a defined values). Also take out the first five coulumns which contain personal information and timestamps figures.
+
+ref_training<- df[colSums(!is.na(df)) > 1000][,6:59]
+
+```
+
+#3- Create Three folds for the three models (67/33 % training and testing):
+
+```{r k-Folds}
+
+folds <- createFolds(y=ref_training$classe,k=3,list=TRUE,returnTrain=TRUE)
+folds.test <- createFolds(y=ref_training$classe,k=3,list=TRUE,returnTrain=FALSE)
+
+```
+
+
+
+# 4- Start Modeling
+
+```{r Modeling (LDA and QDA)}
+
+
+# Start modeling using LDA method and check accuracy on the testing set
+
+modelFit_lda <- train(classe~.,method="lda",data=ref_training[folds[[1]],],verbose= F)
+predt_lda<- predict(modelFit_lda,ref_training[folds.test[[1]],])
+
+
+# Do modeling again using QDA method and check accuracy on the testing set
+
+modelFit_qda <- train(classe~.,method="qda",data=ref_training[folds[[2]],],verbose= F)
+predt_qda<- predict(modelFit_qda,ref_training[folds.test[[2]],])
+
+```
+
+# 5- Make Cross Validation model comparison between LDA and QDA:
+
+##LDA
+
+```{r LDA}
+
+# Define function CorrClass to compute accuracy
+
+CorrClass = function(values,prediction){sum(prediction == values)/length(values)}
+
+
+# Check correct modeling and calculate accuracy on the testing set
+
+lda_acc= CorrClass(ref_training[folds.test[[1]],]$classe,predt_lda)
+
+```
+##QDA
+
+``` {r QDA}
+qda_acc=CorrClass(ref_training[folds.test[[2]],]$classe,predt_qda)
+
+```
+
+Its is clear that quadratic discrimination produces fast and accurate results, better than linear discrimination 
+
+Now, lets try other methods which are not linear like Random forests and Boosting. That will take long time but will produce more accurate reults. So we will only try only Boositng
+
+# 6- Modeling using Boosting
+
+
+```{r Modeling (Boosting)}
+
+
+# Start modeling using Boosting method
+
+
+modelFit_gbm <- train(classe~.,method="gbm",data=ref_training[folds[[3]],],verbose= F)
+predt_gbm<- predict(modelFit_gbm,ref_training[folds.test[[3]],])
+
+# Make accuracy checkup
+
+gbm_acc=CorrClass(ref_training[folds.test[[3]],]$classe,predt_gbm)
+
+```
+
+# 7- Cross Validation, accuracy and out-of-sample errors
+
+```{r cross-validation}
+
+#LDA (Linear Discrimination Analysis)
+
+lda_acc
+table(ref_training[folds.test[[1]],]$classe,predt_lda)
+
+#QDA (Quadratic Discrimination Analysis)
+qda_acc
+table(ref_training[folds.test[[2]],]$classe,predt_qda)
+
+#Boosting
+gbm_acc
+table(ref_training[folds.test[[3]],]$classe,predt_gbm)
+
+
+```
+
+# 8- Summary
+
+As it is showing, boosting then quadratic discrimination shows the best perfromance. Linear discrimination is not reliable.
+
